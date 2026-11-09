@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>타입과 추상화: 객체를 객체답게 만드는 것</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F7; --paper:#FBFCFE; --panel:#FFFFFF; --ink:#16202C; --muted:#586577; --line:#D8DEE9;
+  --common:#2457D6; --common-bg:#E3EBFC;
+  --uniq:#8A5A00;   --uniq-bg:#FBEBC6;
+  --gone:#B3302A;   --gone-bg:#FADFDC;
+  --a:#0B7F6F; --a-bg:#DAF1EC;
+  --b:#6B3FC4; --b-bg:#E9E0FA;
+  --code-bg:#141C2B; --code-ink:#E4E9F2; --code-title:#9AA7BA;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A0F17; --paper:#121A27; --panel:#182233; --ink:#E6EBF4; --muted:#9AA7BA; --line:#2A3649;
+    --common:#8FB1FF; --common-bg:#1B2B52;
+    --uniq:#F2C260;   --uniq-bg:#3B2D0C;
+    --gone:#FF9189;   --gone-bg:#4A1D1A;
+    --a:#4FD6BE; --a-bg:#0F3A33;
+    --b:#B79BFF; --b-bg:#2C2050;
+    --code-bg:#0A1019; --code-ink:#E4E9F2; --code-title:#8A97AB;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A0F17; --paper:#121A27; --panel:#182233; --ink:#E6EBF4; --muted:#9AA7BA; --line:#2A3649;
+  --common:#8FB1FF; --common-bg:#1B2B52;
+  --uniq:#F2C260;   --uniq-bg:#3B2D0C;
+  --gone:#FF9189;   --gone-bg:#4A1D1A;
+  --a:#4FD6BE; --a-bg:#0F3A33;
+  --b:#B79BFF; --b-bg:#2C2050;
+  --code-bg:#0A1019; --code-ink:#E4E9F2; --code-title:#8A97AB;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button{font:inherit;color:inherit}
+
+/* ---------- stage ---------- */
+.viewport{flex:1; min-height:0; position:relative; overflow:hidden}
+.stage{
+  position:absolute; left:50%; top:50%; width:1280px; height:720px;
+  transform:translate(-50%,-50%) scale(var(--s,1)); transform-origin:center center;
+  background:var(--paper); border-radius:6px; overflow:hidden;
+  box-shadow:0 0 0 1px var(--line);
+}
+.slide{display:none; position:absolute; inset:0; padding:44px 64px 36px; flex-direction:column; gap:20px}
+.slide.active{display:flex}
+.slide .notes{display:none}
+
+h1,h2,h3,p,ul,ol,table,figure,pre{margin:0}
+h2{font-size:36px; font-weight:700; letter-spacing:-0.02em; line-height:1.25}
+.head{display:flex; align-items:baseline; justify-content:space-between; gap:24px}
+.tag{
+  flex:none; font-size:16px; font-weight:500; padding:4px 12px; border-radius:999px;
+  background:var(--common-bg); color:var(--common);
+}
+.lead{font-size:22px; line-height:1.55; color:var(--muted)}
+b,strong{font-weight:700}
+.ink{color:var(--ink)}
+
+/* ---------- code ---------- */
+.code-wrap{background:var(--code-bg); border-radius:8px; overflow:hidden; min-width:0; display:flex; flex-direction:column}
+.code-title{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--code-title); padding:8px 16px 0}
+.code{
+  font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-size:14.5px; line-height:1.5; color:var(--code-ink); padding:8px 0 12px; white-space:pre; overflow:hidden;
+}
+.code.sm{font-size:13px}
+.ln{display:block; padding:0 16px; border-left:3px solid transparent; min-height:1.5em}
+.ln.c{border-left-color:#5B8CFF; background:rgba(91,140,255,.13)}
+.ln.u{border-left-color:#F2B84B; background:rgba(242,184,75,.20)}
+.ln.x{border-left-color:#FF6B5E; background:rgba(255,107,94,.14); text-decoration:line-through; text-decoration-color:#FF8A80; opacity:.62}
+.ln.a{border-left-color:#2BD0B5; background:rgba(43,208,181,.13)}
+.ln.b{border-left-color:#A98BFF; background:rgba(169,139,255,.15)}
+.t-k{color:#8FB4FF} .t-t{color:#7FD9C4} .t-s{color:#F2C879} .t-c{color:#7F8CA3} .t-n{color:#F59AB0} .t-p{color:#C4A8FF}
+
+/* ---------- layout helpers ---------- */
+.cols{display:grid; gap:20px; flex:1; min-height:0}
+.cols.c2{grid-template-columns:1fr 1fr}
+.cols.c3{grid-template-columns:repeat(3,1fr); gap:16px}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:22px 26px}
+.card h3{font-size:24px; font-weight:700; margin-bottom:10px; letter-spacing:-0.01em}
+.card p,.card li{font-size:21px; line-height:1.6}
+.card ul{padding-left:1.1em}
+.card li+li{margin-top:6px}
+.callout{
+  border-left:5px solid var(--common); background:var(--common-bg); border-radius:0 8px 8px 0;
+  padding:14px 22px; font-size:22px; line-height:1.55;
+}
+.quote{border-left:4px solid var(--line); padding:6px 18px; font-size:20px; line-height:1.6; color:var(--muted)}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.88em}
+.chip{
+  display:inline-block; font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-size:16px;
+  padding:4px 10px; border-radius:6px; background:var(--common-bg); color:var(--common); white-space:nowrap;
+}
+.chip.u{background:var(--uniq-bg); color:var(--uniq)}
+.chip.x{background:var(--gone-bg); color:var(--gone); text-decoration:line-through}
+.chip.dim{opacity:.55}
+.legend{display:flex; gap:20px; flex-wrap:wrap; font-size:16px; color:var(--muted); align-items:center}
+.legend i{display:inline-block; width:14px; height:14px; border-radius:3px; margin-right:7px; vertical-align:-2px}
+
+table{border-collapse:collapse; width:100%; font-size:20px}
+th,td{padding:12px 16px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.5}
+th{font-weight:700; font-size:18px; color:var(--muted); border-bottom:2px solid var(--line)}
+td:first-child,th:first-child{white-space:nowrap}
+tbody th{color:var(--ink); font-size:20px}
+td.a,th.a{color:var(--a)} td.b,th.b{color:var(--b)}
+
+/* ---------- slide-specific ---------- */
+.title-slide{justify-content:center; padding:0 80px}
+.title-slide h1{font-size:84px; font-weight:900; letter-spacing:-0.04em; line-height:1.1}
+.title-slide .sub{font-size:36px; margin-top:14px; color:var(--common); font-weight:500}
+.title-slide .meta{font-size:20px; margin-top:44px; color:var(--muted)}
+.title-grid{display:grid; grid-template-columns:1.1fr .9fr; gap:40px; align-items:center; height:100%}
+.devrow{display:flex; flex-direction:column; gap:6px; margin-bottom:22px}
+.devrow span.n{font-size:18px; color:var(--muted); font-weight:500}
+.devrow .chips{display:flex; gap:8px; flex-wrap:wrap}
+
+.agenda{display:flex; flex-direction:column; flex:1; justify-content:center}
+.agenda .row{display:grid; grid-template-columns:1fr 90px; gap:20px; padding:18px 4px; border-bottom:1px solid var(--line); align-items:baseline}
+.agenda .row:first-child{border-top:1px solid var(--line)}
+.agenda .row b{font-size:28px; letter-spacing:-0.01em}
+.agenda .row span.d{display:block; font-size:19px; color:var(--muted); margin-top:3px}
+.agenda .row span.m{text-align:right; font-size:22px; color:var(--common); font-weight:500}
+
+.flow{display:flex; align-items:stretch; gap:18px; justify-content:center; margin:6px 0}
+.flow .node{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 26px; min-width:250px; text-align:center}
+.flow .node small{display:block; font-size:16px; color:var(--muted); margin-bottom:6px}
+.flow .node strong{font-size:26px}
+.flow .arrow{display:flex; flex-direction:column; justify-content:center; align-items:center; font-size:18px; color:var(--common); gap:2px; min-width:150px; text-align:center}
+.flow .arrow em{font-style:normal; font-size:34px; line-height:1}
+
+.steps{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px}
+.steps .s{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 20px}
+.steps .s b{display:block; font-size:20px; margin-bottom:4px}
+.steps .s span{font-size:18px; color:var(--muted); line-height:1.5}
+
+.hier{display:grid; grid-template-columns:1fr 1fr; gap:34px; flex:1; min-height:0}
+.box{background:var(--panel); border:2px solid var(--line); border-radius:10px; padding:16px 20px}
+.box h4{margin:0 0 10px; font-size:20px; font-weight:700}
+.box .chips{display:flex; gap:8px; flex-wrap:wrap}
+.box.sup{border-color:var(--common)}
+.box.sub{border-color:var(--uniq)}
+.mid{display:flex; align-items:center; justify-content:center; gap:26px; font-size:18px; color:var(--muted); padding:10px 0}
+.mid span{display:flex; flex-direction:column; align-items:center; line-height:1.3}
+.mid em{font-style:normal; font-size:30px; color:var(--ink)}
+.stack{display:flex; flex-direction:column; justify-content:center}
+
+.points{display:flex; flex-direction:column; gap:14px; justify-content:center}
+.points .p{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 22px; font-size:21px; line-height:1.55}
+.points .p b{display:block; margin-bottom:2px}
+
+.final li{font-size:25px; line-height:1.55; padding:12px 0; border-bottom:1px solid var(--line); list-style:none}
+.final ol{padding:0; counter-reset:f}
+.final li::before{counter-increment:f; content:counter(f); display:inline-block; width:34px; height:34px; line-height:34px; text-align:center; border-radius:50%; background:var(--common-bg); color:var(--common); font-size:18px; font-weight:700; margin-right:16px}
+
+/* ---------- toolbar & notes ---------- */
+.notes-panel{
+  flex:none; max-height:34%; overflow:auto; background:var(--panel); border-top:1px solid var(--line);
+  padding:14px 28px; font-size:17px; line-height:1.75;
+}
+.notes-panel[hidden]{display:none}
+.notes-panel .lbl{font-size:14px; color:var(--muted); margin-bottom:4px}
+.bar{
+  flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--panel);
+  border-top:1px solid var(--line); position:relative; font-size:15px;
+}
+.bar button{
+  background:transparent; border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer; min-height:36px;
+}
+.bar button:hover{background:var(--common-bg)}
+.bar button:focus-visible{outline:3px solid var(--common); outline-offset:2px}
+.bar button[aria-pressed="true"]{background:var(--common-bg); color:var(--common); border-color:var(--common)}
+.bar .count{min-width:64px; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums}
+.bar .sp{flex:1}
+.bar .ttl{color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:38%}
+.progress{position:absolute; left:0; top:-1px; height:3px; background:var(--common); width:0}
+@media (max-width:640px){ .bar .ttl{display:none} .bar .hide-s{display:none} }
+</style>
+</head>
+<body>
+
+<main class="viewport" id="viewport">
+<div class="stage" id="stage">
+
+<!-- 1. 표지 -->
+<section class="slide title-slide" data-title="표지">
+  <div class="title-grid">
+    <div>
+      <h1>타입과 추상화</h1>
+      <p class="sub">객체를 객체답게 만드는 것</p>
+      <p class="meta">「객체지향의 사실과 오해」 3장 · 발표 15분</p>
+    </div>
+    <div>
+      <div class="devrow"><span class="n">Smartphone</span><div class="chips"><span class="chip">plugIn()</span><span class="chip">connectWifi()</span><span class="chip u">call()</span></div></div>
+      <div class="devrow"><span class="n">Laptop</span><div class="chips"><span class="chip">plugIn()</span><span class="chip">connectWifi()</span><span class="chip u">openLid()</span></div></div>
+      <div class="devrow"><span class="n">SmartWatch</span><div class="chips"><span class="chip">plugIn()</span><span class="chip">connectWifi()</span><span class="chip u">measureHeartRate()</span></div></div>
+    </div>
+  </div>
+  <aside class="notes">안녕하세요. 오늘은 「객체지향의 사실과 오해」 3장, 타입과 추상화를 발표하겠습니다. 화면 오른쪽의 세 기기는 오늘 예시 1에서 다룰 대상입니다. 파란색은 세 기기가 공통으로 하는 행동이고, 노란색은 각자만 하는 행동입니다. 이 구분이 오늘 발표의 핵심입니다. (약 30초)</aside>
+</section>
+
+<!-- 2. 아젠다 -->
+<section class="slide" data-title="오늘 이야기할 것">
+  <div class="head"><h2>오늘 이야기할 것</h2><span class="tag">총 15분</span></div>
+  <div class="agenda">
+    <div class="row"><div><b>추상화의 두 가지 차원</b><span class="d">예시 1: 전자 기기 (스마트폰, 노트북, 스마트워치)</span></div><span class="m">4분</span></div>
+    <div class="row"><div><b>객체, 인스턴스, 분류</b><span class="d">심볼, 내연, 외연</span></div><span class="m">2분</span></div>
+    <div class="row"><div><b>타입은 행동입니다</b><span class="d">예시 2: 직교좌표와 극좌표</span></div><span class="m">3분</span></div>
+    <div class="row"><div><b>슈퍼타입과 서브타입</b><span class="d">예시 3: 기기와 스마트워치</span></div><span class="m">3분</span></div>
+    <div class="row"><div><b>정적 모델과 동적 모델, 정리</b><span class="d">결국 타입은 추상화입니다</span></div><span class="m">2분</span></div>
+  </div>
+  <p class="lead ink">오늘의 한 문장: <b>객체를 결정하는 것은 데이터가 아니라 행동입니다.</b></p>
+  <aside class="notes">오늘은 3장의 핵심 질문인 “타입이란 무엇인가”를 다룹니다. 책은 타입을 추상화라고 정의하고, 타입을 결정하는 것은 데이터가 아니라 행동이라고 말합니다. 이 두 가지를 C++ 코드 예시 세 개로 확인해 보겠습니다. 시간 배분은 화면과 같습니다. (약 30초)</aside>
+</section>
+
+<!-- 3. 추상화란 -->
+<section class="slide" data-title="추상화란?">
+  <div class="head"><h2>추상화란?</h2><span class="tag">복잡도를 극복하는 방법</span></div>
+  <p class="lead">어떤 대상을 명확하게 이해하기 위해, 세부 사항이나 구조를 <b class="ink">의도적으로 생략하거나 감추는</b> 것입니다.</p>
+  <div class="cols c2">
+    <div class="card">
+      <h3>1차원: 일반화</h3>
+      <p>구체적인 사물들의 <b>공통점은 취하고 차이점은 버립니다.</b></p>
+      <p style="margin-top:18px;color:var(--muted);font-size:19px">스마트폰, 노트북, 스마트워치 → <b class="ink">기기</b></p>
+    </div>
+    <div class="card">
+      <h3>2차원: 불필요한 세부 사항 제거</h3>
+      <p>중요한 부분을 강조하기 위해 <b>지금 목적에 필요 없는 것을 걷어냅니다.</b></p>
+      <p style="margin-top:18px;color:var(--muted);font-size:19px">충전소 관리라면 와이파이는 필요 없음</p>
+    </div>
+  </div>
+  <div class="callout">무엇이 공통이고 무엇이 불필요한지 판단하는 기준은 필드가 아니라 객체의 <b>행동</b>입니다.</div>
+  <aside class="notes">두 차원 모두 “무엇을 버릴 것인가”를 정하는 일입니다. 1차원은 대상들 사이의 차이를 버리는 것이고, 2차원은 지금 목적에 필요 없는 것을 버리는 것입니다. 그리고 이때 판단 기준은 필드가 아니라 행동입니다. 객체가 어떤 행동을 하는지를 보고 공통점을 찾고, 프로그램의 목적에 필요한 행동만 남기며, 데이터는 그 행동을 따라 남습니다. 이 순서를 전자 기기 예시로 따라가 보겠습니다. (약 1분)</aside>
+</section>
+
+<!-- 4. 예시1 Step0 -->
+<section class="slide" data-title="예시 1 Step 0">
+  <div class="head"><h2>Step 0. 추상화 이전: 구체적인 기기들</h2><span class="tag">예시 1</span></div>
+  <div class="legend"><span><i style="background:#5B8CFF"></i>세 기기 모두가 하는 공통 행동</span><span><i style="background:#F2B84B"></i>기기마다 다른 고유 행동</span></div>
+  <div class="cols c3" style="gap:16px">
+    <div class="code-wrap"><div class="code-title">Smartphone</div><pre class="code sm">
+class Smartphone {
+public:
+@c   void plugIn();
+@c   void unplug();
+@c   int  batteryLevel() const;
+@c   void connectWifi(const std::string&amp; ssid);
+@c   void disconnectWifi();
+@c   bool isConnected() const;
+@u   void call(const std::string&amp; number);
+};</pre></div>
+    <div class="code-wrap"><div class="code-title">Laptop</div><pre class="code sm">
+class Laptop {
+public:
+@c   void plugIn();
+@c   void unplug();
+@c   int  batteryLevel() const;
+@c   void connectWifi(const std::string&amp; ssid);
+@c   void disconnectWifi();
+@c   bool isConnected() const;
+@u   void openLid();
+};</pre></div>
+    <div class="code-wrap"><div class="code-title">SmartWatch</div><pre class="code sm">
+class SmartWatch {
+public:
+@c   void plugIn();
+@c   void unplug();
+@c   int  batteryLevel() const;
+@c   void connectWifi(const std::string&amp; ssid);
+@c   void disconnectWifi();
+@c   bool isConnected() const;
+@u   int  measureHeartRate() const;
+};</pre></div>
+  </div>
+  <div class="callout">문제: 같은 행동이 세 번 반복되고, 셋이 모두 “기기”라는 하나의 개념이라는 사실이 코드에 드러나지 않습니다.</div>
+  <aside class="notes">먼저 추상화를 적용하기 전입니다. 스마트폰, 노트북, 스마트워치를 각각 클래스로 만들었습니다. 파란색 줄은 세 기기가 모두 하는 공통 행동이고, 노란색 줄은 기기마다 다른 고유 행동입니다. 보시다시피 같은 여섯 줄이 세 번 반복됩니다. 그리고 이 셋이 모두 “기기”라는 사실은 코드 어디에도 드러나지 않습니다. (약 1분)</aside>
+</section>
+
+<!-- 5. 예시1 Step1 -->
+<section class="slide" data-title="예시 1 Step 1">
+  <div class="head"><h2>Step 1. 1차원: 차이는 버리고 공통 행동만 취한다</h2><span class="tag">예시 1</span></div>
+  <div class="cols c2" style="grid-template-columns:.85fr 1.15fr">
+    <div class="stack" style="gap:16px">
+      <div class="card">
+        <h3>버리는 것: 고유 행동</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+          <div><span class="chip x">call()</span> <span style="color:var(--muted);font-size:18px">스마트폰만</span></div>
+          <div><span class="chip x">openLid()</span> <span style="color:var(--muted);font-size:18px">노트북만</span></div>
+          <div><span class="chip x">measureHeartRate()</span> <span style="color:var(--muted);font-size:18px">스마트워치만</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>취하는 것: 공통 행동</h3>
+        <p>클래스 세 개가 <code>Device</code> 하나로 줄었습니다.</p>
+      </div>
+    </div>
+    <div class="code-wrap"><div class="code-title">Device — 기기라면 누구나 하는 행동의 집합</div><pre class="code">
+class Device {
+public:
+@c   void plugIn();
+@c   void unplug();
+@c   int  batteryLevel() const;
+@c   void connectWifi(const std::string&amp; ssid);
+@c   void disconnectWifi();
+@c   bool isConnected() const;
+private:
+  // 행동을 수행하는 데 필요한 상태:
+  // charging, battery, ssid ...
+};</pre></div>
+  </div>
+  <div class="callout">그러나 충전 행동과 네트워크 행동이 한 타입에 섞여 있어, 어떤 프로그램도 이 모두를 필요로 하지는 않습니다.</div>
+  <aside class="notes">1차원을 적용합니다. 기기마다 다른 행동인 통화, 덮개 열기, 심박 측정은 버립니다. 그리고 세 기기가 모두 하는 행동만 모아 Device 하나로 묶습니다. 클래스가 세 개에서 하나로 줄었고, 이제 코드에 “기기”라는 개념이 드러납니다. 다만 이 Device에는 충전과 네트워크라는 두 종류의 행동이 섞여 있습니다. 실제 프로그램은 대부분 이 둘을 모두 필요로 하지 않습니다. (약 1분)</aside>
+</section>
+
+<!-- 6. 예시1 Step2 -->
+<section class="slide" data-title="예시 1 Step 2">
+  <div class="head"><h2>Step 2. 2차원: 목적에 불필요한 행동을 제거한다</h2><span class="tag">예시 1</span></div>
+  <div class="cols c2">
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div style="font-size:21px;font-weight:700;color:var(--a)">목적 A: 충전소 관리 프로그램</div>
+      <div class="code-wrap"><div class="code-title">Device</div><pre class="code">
+class Device {
+public:
+@a   void plugIn()  { charging_ = true; }
+@a   void unplug()  { charging_ = false; }
+@a   int  batteryLevel() const { return battery_; }
+@x   void connectWifi(const std::string&amp; ssid);
+@x   void disconnectWifi();
+@x   bool isConnected() const;
+private:
+@a   bool charging_ = false;
+@a   int  battery_ = 0;
+@x   std::string ssid_;
+};</pre></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div style="font-size:21px;font-weight:700;color:var(--b)">목적 B: 사무실 네트워크 관리 프로그램</div>
+      <div class="code-wrap"><div class="code-title">Device</div><pre class="code">
+class Device {
+public:
+@x   void plugIn();
+@x   void unplug();
+@x   int  batteryLevel() const;
+@b   void connectWifi(const std::string&amp; s) { ssid_ = s; }
+@b   void disconnectWifi()    { ssid_.clear(); }
+@b   bool isConnected() const { return !ssid_.empty(); }
+private:
+@x   bool charging_ = false;
+@x   int  battery_ = 0;
+@b   std::string ssid_;
+};</pre></div>
+    </div>
+  </div>
+  <div class="callout">행동을 정하자 필요한 상태가 <b>따라서</b> 남았습니다. 필드는 한 번도 직접 고르지 않았습니다.</div>
+  <aside class="notes">2차원을 적용합니다. 같은 Device라도 프로그램의 목적에 따라 필요한 행동이 다릅니다. 충전소 관리 프로그램은 꽂고, 빼고, 배터리 잔량을 보는 행동만 필요합니다. 그래서 와이파이 행동을 제거했더니, 접속 중인 SSID라는 상태도 함께 사라졌습니다. 반대로 네트워크 관리 프로그램은 접속 행동만 필요하고, 충전 여부와 배터리 잔량 상태가 함께 사라집니다. 여기서 주목하실 점은 제가 필드를 직접 고른 적이 없다는 것입니다. 행동을 정하자 상태가 따라왔습니다. 책의 표현으로는 상태는 행동의 부산물입니다. (약 1분 30초)</aside>
+</section>
+
+<!-- 7. 예시1 요약 -->
+<section class="slide" data-title="예시 1 정리">
+  <div class="head"><h2>예시 1 정리: 같은 기기, 다른 추상화</h2><span class="tag">예시 1</span></div>
+  <div class="steps">
+    <div class="s"><b>Step 0</b><span>구체적인 기기 3종<br>공통 행동이 중복되고 개념이 보이지 않음</span></div>
+    <div class="s"><b>Step 1 · 1차원</b><span>기기마다 다른 행동을 제거<br><code>Device</code> 하나로 통합</span></div>
+    <div class="s"><b>Step 2 · 2차원</b><span>목적에 불필요한 행동을 제거<br>목적별로 다른 <code>Device</code>가 만들어짐</span></div>
+  </div>
+  <table>
+    <thead><tr><th></th><th class="a">목적 A: 충전소 관리</th><th class="b">목적 B: 네트워크 관리</th></tr></thead>
+    <tbody>
+      <tr><th>남긴 행동</th><td><code>plugIn() unplug() batteryLevel()</code></td><td><code>connectWifi() disconnectWifi() isConnected()</code></td></tr>
+      <tr><th>제거한 행동</th><td>와이파이 관련 3개</td><td>충전 관련 3개</td></tr>
+      <tr><th>따라서 남은 상태</th><td>충전 여부, 배터리 잔량</td><td>접속 SSID</td></tr>
+      <tr><th>따라서 사라진 상태</th><td>접속 SSID</td><td>충전 여부, 배터리 잔량</td></tr>
+    </tbody>
+  </table>
+  <aside class="notes">정리하겠습니다. Step 0에서 Step 1로 갈 때 기기마다 다른 행동을 버렸고, 이것이 1차원입니다. Step 1에서 Step 2로 갈 때 목적에 필요 없는 행동을 버렸고, 이것이 2차원입니다. 같은 기기를 추상화했는데 목적이 다르면 전혀 다른 타입이 됩니다. 추상화에는 정답이 없고, 목적이 무엇을 남기고 버릴지 결정합니다. (약 30초)</aside>
+</section>
+
+<!-- 8. 인스턴스와 분류 -->
+<section class="slide" data-title="인스턴스와 분류">
+  <div class="head"><h2>인스턴스와 분류</h2><span class="tag">2분</span></div>
+  <div class="flow" style="margin-top:12px">
+    <div class="node"><small>객체</small><strong>내 스마트폰</strong></div>
+    <div class="arrow"><span>개념을 적용한다<br>= 분류</span><em>→</em></div>
+    <div class="node"><small>개념</small><strong>Device</strong></div>
+    <div class="arrow"><span>적용되면</span><em>→</em></div>
+    <div class="node"><small>인스턴스</small><strong>Device의 인스턴스</strong></div>
+  </div>
+  <div class="cols c3" style="flex:none">
+    <div class="card"><h3>객체</h3><p style="font-size:19px">특정한 개념을 적용할 수 있는 구체적인 사물입니다.</p></div>
+    <div class="card"><h3>인스턴스</h3><p style="font-size:19px">개념이 적용된 객체를 그 개념의 인스턴스라고 합니다.</p></div>
+    <div class="card"><h3>분류</h3><p style="font-size:19px">객체에 개념을 적용하는 작업이며, 객체를 특정 집합의 멤버로 정하는 일입니다.</p></div>
+  </div>
+  <div class="callout">좋은 분류 체계는 개발자의 머릿속에 객체를 쉽게 찾고 다룰 수 있는 <b>정신적인 지도</b>가 됩니다.</div>
+  <aside class="notes">내 스마트폰은 객체입니다. 여기에 기기라는 개념을 적용하면 이 스마트폰은 Device의 인스턴스가 됩니다. 이렇게 객체에 개념을 적용하는 일이 분류입니다. 분류 체계가 좋으면 코드를 읽을 때 어떤 객체가 어디에 속하는지 머릿속에 지도가 생겨서 찾고 조작하기 쉬워집니다. (약 1분)</aside>
+</section>
+
+<!-- 9. 심볼 내연 외연 -->
+<section class="slide" data-title="심볼, 내연, 외연">
+  <div class="head"><h2>개념을 보는 세 가지 관점</h2><span class="tag">책의 예: 앨리스의 트럼프</span></div>
+  <table>
+    <thead><tr><th>관점</th><th>의미</th><th>책 속 예시 (트럼프)</th><th>C++에서는</th></tr></thead>
+    <tbody>
+      <tr><th>심볼</th><td>개념을 가리키는 간략한 이름</td><td>“트럼프”</td><td><code>class Device</code></td></tr>
+      <tr><th>내연</th><td>개념의 완전한 정의, 객체가 속하는지 판단하는 조건</td><td>몸이 납작하고 두 손과 두 발이 네모난 몸 모서리에 달려 있다</td><td>공개 인터페이스(행동)와 지켜야 할 규칙</td></tr>
+      <tr><th>외연</th><td>개념에 속하는 모든 객체의 집합</td><td>정원사, 병사, 신하, 하트 잭, 하트 왕, 하트 여왕</td><td><code>Device</code>로 만든 인스턴스들</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">내연은 현실 세계의 설명이므로, 코드에서 그대로 필드로 만들 필요는 없습니다. 코드에서는 <b>“이 타입이 무엇을 할 수 있는가”</b>가 내연의 역할을 합니다.</div>
+  <aside class="notes">책은 개념을 세 가지 관점으로 설명합니다. 심볼은 이름이고, 내연은 개념의 정의이며, 외연은 그 개념에 속하는 객체들의 집합입니다. 책에서는 앨리스 이야기의 트럼프로 설명하지만, 코드 예시는 기기로 보여드렸습니다. 한 가지 짚을 점은 내연입니다. “몸이 납작하다” 같은 설명은 현실 세계의 서술이지, 코드의 필드로 옮길 대상이 아닙니다. 코드에서는 타입이 제공하는 행동과 규칙이 내연의 역할을 합니다. (약 1분)</aside>
+</section>
+
+<!-- 10. 타입이란 -->
+<section class="slide" data-title="타입이란?">
+  <div class="head"><h2>타입은 행동입니다</h2><span class="tag">타입 = 개념</span></div>
+  <div class="cols c2">
+    <div class="card">
+      <h3>데이터 타입</h3>
+      <ul>
+        <li>타입은 데이터가 <b>어떻게 사용되느냐</b>에 관한 것입니다.</li>
+        <li>정수는 <code>+ - * /</code>, 문자열은 길이 구하기처럼 적용 가능한 <b>연산</b>이 타입을 결정합니다.</li>
+        <li>메모리에 어떻게 표현하는지는 외부로부터 <b>감춰집니다.</b></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>객체의 타입도 마찬가지</h3>
+      <ul>
+        <li>객체는 행동이 중심이고, 상태는 행동의 <b>부산물</b>입니다.</li>
+        <li>동일한 행동을 하면 내부 표현이 달라도 <b>같은 타입</b>입니다.</li>
+        <li>내부 표현을 감추는 것이 <b>캡슐화</b>, 같은 메시지를 다르게 처리하는 것이 <b>다형성</b>입니다.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="quote">“객체를 결정하는 것은 행동이다. 데이터는 단지 행동을 따를 뿐이다.”</div>
+  <aside class="notes">타입은 개념과 같고, 타입의 인스턴스는 그 타입을 구성하는 객체 집합의 일원입니다. 책은 데이터 타입에서 두 가지를 짚습니다. 하나는 타입이 그 데이터에 적용할 수 있는 연산으로 결정된다는 것이고, 다른 하나는 메모리 표현이 외부로부터 감춰진다는 것입니다. 이 두 가지는 객체의 타입에도 그대로 적용됩니다. 그래서 예시 1에서 처음부터 끝까지 행동을 기준으로 추상화했던 것입니다. 다음 예시로 이를 확인해 보겠습니다. (약 1분)</aside>
+</section>
+
+<!-- 11. 예시2 -->
+<section class="slide" data-title="예시 2">
+  <div class="head"><h2>예시 2. 행동이 같으면 같은 타입입니다</h2><span class="tag">예시 2 · 좌표</span></div>
+  <div class="cols c2" style="flex:none">
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="code-wrap"><div class="code-title">타입 = 행동의 집합 (데이터 없음)</div><pre class="code">
+class Point {
+public:
+  virtual ~Point() = default;
+  virtual double x() const = 0;
+  virtual double y() const = 0;
+  double distanceFromOrigin() const {
+    return std::sqrt(x()*x() + y()*y());
+  }
+};</pre></div>
+      <div class="code-wrap"><div class="code-title">내부 표현 1: 직교좌표 (x, y)</div><pre class="code">
+class CartesianPoint : public Point {
+public:
+  CartesianPoint(double x, double y) : x_(x), y_(y) {}
+  double x() const override { return x_; }
+  double y() const override { return y_; }
+private:
+  double x_, y_;
+};</pre></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="code-wrap"><div class="code-title">내부 표현 2: 극좌표 (r, θ)</div><pre class="code">
+class PolarPoint : public Point {
+public:
+  PolarPoint(double r, double t) : r_(r), t_(t) {}
+  double x() const override { return r_ * std::cos(t_); }
+  double y() const override { return r_ * std::sin(t_); }
+private:
+  double r_, t_;
+};</pre></div>
+      <div class="code-wrap"><div class="code-title">사용하는 쪽은 내부 표현을 모릅니다</div><pre class="code">
+void printDistance(const Point&amp; p) {
+  std::cout &lt;&lt; p.distanceFromOrigin() &lt;&lt; '\n';
+}
+int main() {
+  CartesianPoint a(3.0, 4.0);
+  PolarPoint     b(5.0, std::atan2(4.0, 3.0));
+  printDistance(a);   // 5
+  printDistance(b);   // 5
+}</pre></div>
+    </div>
+  </div>
+  <div class="cols c3" style="flex:none;gap:14px">
+    <div class="points"><div class="p" style="padding:10px 16px;font-size:18px"><b>같은 타입</b>데이터가 전혀 달라도 행동이 같으므로 둘 다 <code>Point</code>입니다.</div></div>
+    <div class="points"><div class="p" style="padding:10px 16px;font-size:18px"><b>캡슐화</b><code>printDistance</code>는 내부 표현을 모릅니다.</div></div>
+    <div class="points"><div class="p" style="padding:10px 16px;font-size:18px"><b>다형성</b>같은 메시지 <code>x()</code>, <code>y()</code>를 다른 방식으로 처리합니다.</div></div>
+  </div>
+  <aside class="notes">직교좌표는 x, y를 저장하고 극좌표는 반지름과 각도를 저장합니다. 내부 데이터가 완전히 다릅니다. 그런데 x()와 y()라는 행동은 똑같이 제공합니다. 그래서 둘 다 Point 타입입니다. 맨 위 Point 클래스를 보시면 데이터가 하나도 없는 순수한 행동의 명세인데도 타입으로 성립합니다. 이것이 “타입은 행동이다”라는 말을 가장 잘 보여줍니다. printDistance는 내부 표현을 모르기 때문에, 나중에 표현을 바꿔도 수정할 필요가 없습니다. 이것이 캡슐화이고, 같은 메시지를 다르게 처리하는 것이 다형성입니다. (약 3분)</aside>
+</section>
+
+<!-- 12. 타입 계층 -->
+<section class="slide" data-title="타입의 계층">
+  <div class="head"><h2>타입의 계층: 일반화와 특수화</h2><span class="tag">행동의 포함 관계</span></div>
+  <div class="hier">
+    <div class="stack">
+      <div class="box sup">
+        <h4>Device · 슈퍼타입</h4>
+        <div class="chips"><span class="chip">plugIn()</span><span class="chip">unplug()</span><span class="chip">batteryLevel()</span></div>
+      </div>
+      <div class="mid"><span><em>↓</em>특수화</span><span><em>↑</em>일반화</span></div>
+      <div class="box sub">
+        <h4>SmartWatch · 서브타입</h4>
+        <div class="chips"><span class="chip dim">plugIn()</span><span class="chip dim">unplug()</span><span class="chip dim">batteryLevel()</span><span class="chip u">measureHeartRate()</span></div>
+      </div>
+    </div>
+    <div class="points">
+      <div class="p"><b>슈퍼타입 (일반적인 타입)</b>특수한 타입이 가진 행동 중 <b style="display:inline">일부만</b> 가진 타입입니다.</div>
+      <div class="p"><b>서브타입 (특수한 타입)</b>일반적인 타입의 <b style="display:inline">모든 행동을 포함</b>하고, 자신만의 행동을 <b style="display:inline">추가</b>한 타입입니다.</div>
+    </div>
+  </div>
+  <div class="quote">“일반화/특수화는 행동에 관한 것이다.”</div>
+  <aside class="notes">책에서는 트럼프가 트럼프 인간보다 일반적인 개념이고, 트럼프 인간이 더 특수한 개념이라고 설명합니다. 이 관계를 일반화와 특수화라고 합니다. 중요한 것은 이 관계가 행동의 관점이라는 점입니다. 일반적인 타입은 특수한 타입이 가진 행동 중 일부만 가진 타입입니다. 특수한 타입은 일반적인 타입의 모든 행동을 포함하고, 거기에 자기만의 행동을 더한 타입입니다. 화면의 기기와 스마트워치로 보면 Device는 충전 행동만 갖고, SmartWatch는 그 행동을 모두 갖고 심박 측정을 추가합니다. (약 1분)</aside>
+</section>
+
+<!-- 13. 예시3 -->
+<section class="slide" data-title="예시 3">
+  <div class="head"><h2>예시 3. 슈퍼타입과 서브타입</h2><span class="tag">예시 3 · 기기와 스마트워치</span></div>
+  <div class="cols c2" style="grid-template-columns:1.25fr .75fr">
+    <div class="code-wrap"><div class="code-title">슈퍼타입은 일부만, 서브타입은 모두 + 추가</div><pre class="code">
+class Device {              // 슈퍼타입
+public:
+  void plugIn()  { charging_ = true; }
+  void unplug()  { charging_ = false; }
+  int  batteryLevel() const { return battery_; }
+private:
+  bool charging_ = false;
+  int  battery_ = 0;
+};
+
+class SmartWatch : public Device {   // 서브타입
+public:
+  int measureHeartRate() const { return 72; }
+};
+
+void startCharging(Device&amp; d) { d.plugIn(); }
+
+int main() {
+  Device     phone;
+  SmartWatch watch;
+  startCharging(phone);   // 가능
+  startCharging(watch);   // 가능: 모든 행동을 가짐
+  watch.measureHeartRate();
+  // phone.measureHeartRate();   // 컴파일 오류
+}</pre></div>
+    <div class="points">
+      <div class="p"><b>대체할 수 있습니다</b><code>SmartWatch</code>는 <code>Device</code>의 모든 행동을 가지므로 <code>Device</code>가 필요한 곳 어디에나 쓸 수 있습니다.</div>
+      <div class="p"><b>반대는 안 됩니다</b><code>Device</code>에는 <code>measureHeartRate()</code>가 없으므로 서브타입이 필요한 곳에 쓸 수 없습니다.</div>
+      <div class="p"><b>예시 1과 이어집니다</b><code>Device</code>는 목적 A(충전소 관리)에서 만든 타입입니다.</div>
+    </div>
+  </div>
+  <aside class="notes">예시 3은 예시 1에서 만든 Device를 그대로 이어서 씁니다. Device는 충전소 관리 목적으로 추상화한 타입이고, 충전 행동 세 개만 갖습니다. SmartWatch는 Device를 상속받아 심박 측정이라는 자기만의 행동을 추가합니다. startCharging 함수는 Device의 행동만 요구하기 때문에 SmartWatch를 넘겨도 문제없습니다. 서브타입은 슈퍼타입의 행동을 모두 갖고 있기 때문입니다. 반대로 phone에서 measureHeartRate를 호출하면 컴파일 오류가 납니다. 상속을 데이터나 코드 재사용이 아니라 행동의 포함 관계로 봐야 한다는 점이 이 장의 핵심입니다. (약 3분)</aside>
+</section>
+
+<!-- 14. 정적/동적 -->
+<section class="slide" data-title="정적 모델과 동적 모델">
+  <div class="head"><h2>정적 모델과 동적 모델</h2><span class="tag">결국 타입은 추상화다</span></div>
+  <p class="lead">타입은 <b class="ink">시간과 상태 변화라는 요소를 제거</b>하고, 대상을 정적인 관점에서 보게 해 줍니다.</p>
+  <table>
+    <thead><tr><th></th><th>동적 모델</th><th>정적 모델</th></tr></thead>
+    <tbody>
+      <tr><th>표현하는 것</th><td>특정 시점의 객체 상태, 즉 <b>스냅샷</b></td><td>객체가 가질 수 있는 모든 상태와 행동</td></tr>
+      <tr><th>시간</th><td>시간에 따라 변함</td><td>시간에 독립적</td></tr>
+      <tr><th>UML</th><td>객체 다이어그램</td><td>타입(클래스) 다이어그램</td></tr>
+      <tr><th>예시 3에서는</th><td><code>main()</code>에서 만든 <code>phone</code>, <code>watch</code>의 한 시점 상태</td><td><code>class Device</code>, <code>class SmartWatch</code> 선언 자체</td></tr>
+    </tbody>
+  </table>
+  <aside class="notes">마지막 개념입니다. 객체를 모델링하는 방법은 두 가지입니다. 동적 모델은 객체가 특정 시점에 어떤 상태를 갖는지, 즉 스냅샷을 포착합니다. 정적 모델은 객체가 가질 수 있는 모든 상태와 행동을 시간과 무관하게 표현합니다. 클래스 선언이 바로 정적 모델입니다. 시간이라는 요소를 제거했다는 점에서 타입은 추상화입니다. (약 1분)</aside>
+</section>
+
+<!-- 15. 정리 -->
+<section class="slide final" data-title="정리">
+  <div class="head"><h2>정리</h2><span class="tag">1분</span></div>
+  <ol>
+    <li>추상화는 차이점을 버리거나(1차원) 불필요한 세부 사항을 제거하는(2차원) 일이며, 무엇이 불필요한지는 <b>목적</b>이 정합니다.</li>
+    <li>개념은 <b>심볼·내연·외연</b>으로 설명하고, 객체를 분류한다는 것은 개념을 적용하는 일입니다.</li>
+    <li><b>타입은 행동으로 결정</b>되며, 내부 표현은 감춥니다. (캡슐화, 다형성)</li>
+    <li>슈퍼타입과 서브타입의 관계는 <b>행동의 포함 관계</b>입니다.</li>
+    <li>타입은 시간을 제거한 정적 모델이며, 결국 <b>타입은 추상화</b>입니다.</li>
+  </ol>
+  <div class="callout" style="margin-top:auto">클래스를 설계할 때 “무슨 필드를 가질까”보다 <b>“이 프로그램의 목적에서 어떤 행동이 필요할까”</b>를 먼저 물어보시길 권합니다.</div>
+  <aside class="notes">정리하겠습니다. 추상화는 무엇을 버릴지 정하는 일이고, 그 기준은 목적과 행동입니다. 타입은 데이터가 아니라 행동으로 결정되며, 슈퍼타입과 서브타입은 행동의 포함 관계입니다. 마지막으로 하나만 기억해 주신다면, 클래스를 설계할 때 “무슨 필드를 가질까”보다 “이 프로그램의 목적에서 어떤 행동이 필요할까”를 먼저 물어보시길 권합니다. 감사합니다. (약 1분)</aside>
+</section>
+
+</div>
+</main>
+
+<section class="notes-panel" id="notesPanel" hidden aria-live="polite">
+  <div class="lbl">발표 멘트</div>
+  <div id="notesText"></div>
+</section>
+
+<nav class="bar" aria-label="슬라이드 이동">
+  <div class="progress" id="progress"></div>
+  <button id="prev" aria-label="이전 슬라이드">‹ 이전</button>
+  <span class="count" id="count">1 / 15</span>
+  <button id="next" aria-label="다음 슬라이드">다음 ›</button>
+  <span class="ttl" id="ttl"></span>
+  <span class="sp"></span>
+  <button id="notesBtn" aria-pressed="false" title="N">발표 멘트</button>
+  <button id="themeBtn" class="hide-s" title="T">테마</button>
+  <button id="fsBtn" class="hide-s" title="F">전체화면</button>
+</nav>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var stage = document.getElementById('stage');
+  var viewport = document.getElementById('viewport');
+  var notesPanel = document.getElementById('notesPanel');
+  var notesText = document.getElementById('notesText');
+  var countEl = document.getElementById('count');
+  var ttlEl = document.getElementById('ttl');
+  var progress = document.getElementById('progress');
+  var cur = 0;
+
+  /* ----- C++ highlighter ----- */
+  var KW = {'class':1,'public':1,'private':1,'protected':1,'virtual':1,'override':1,'const':1,'void':1,'int':1,'double':1,'bool':1,'return':1,'explicit':1,'default':1,'true':1,'false':1,'auto':1,'char':1};
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function hl(src){
+    var re = /(\/\/.*$)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)/g;
+    var out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null){
+      out += esc(src.slice(last, m.index));
+      if (m[1]) out += '<span class="t-c">' + esc(m[1]) + '</span>';
+      else if (m[2] || m[3]) out += '<span class="t-s">' + esc(m[0]) + '</span>';
+      else if (m[4]) out += '<span class="t-n">' + esc(m[0]) + '</span>';
+      else {
+        var w = m[5];
+        if (KW[w]) out += '<span class="t-k">' + w + '</span>';
+        else if (w === 'std' || /^[A-Z]/.test(w)) out += '<span class="t-t">' + w + '</span>';
+        else out += w;
+      }
+      last = m.index + m[0].length;
+    }
+    return out + esc(src.slice(last));
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('pre.code'), function(pre){
+    var lines = pre.textContent.replace(/^\n/, '').replace(/\s+$/, '').split('\n');
+    pre.innerHTML = lines.map(function(line){
+      var cls = '';
+      var mk = /^@([cuxab]) (.*)$/.exec(line);
+      if (mk){ cls = ' ' + mk[1]; line = mk[2]; }
+      return '<span class="ln' + cls + '">' + hl(line) + '</span>';
+    }).join('');
+  });
+
+  /* ----- scaling ----- */
+  function fit(){
+    var r = viewport.getBoundingClientRect();
+    var s = Math.min(r.width / 1280, r.height / 720);
+    stage.style.setProperty('--s', Math.max(s, 0.1));
+  }
+
+  /* ----- navigation ----- */
+  function show(i, fromHash){
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function(s, k){ s.classList.toggle('active', k === cur); });
+    countEl.textContent = (cur + 1) + ' / ' + slides.length;
+    ttlEl.textContent = slides[cur].getAttribute('data-title') || '';
+    progress.style.width = ((cur + 1) / slides.length * 100) + '%';
+    var n = slides[cur].querySelector('.notes');
+    notesText.textContent = n ? n.textContent : '';
+    document.getElementById('prev').disabled = cur === 0;
+    document.getElementById('next').disabled = cur === slides.length - 1;
+    if (!fromHash){
+      try { history.replaceState(null, '', '#s' + (cur + 1)); } catch (e) {}
+    }
+    requestAnimationFrame(fit);
+  }
+  function fromHash(){
+    var m = /^#s(\d+)$/.exec(location.hash);
+    show(m ? parseInt(m[1], 10) - 1 : 0, true);
+  }
+
+  document.getElementById('prev').addEventListener('click', function(){ show(cur - 1); });
+  document.getElementById('next').addEventListener('click', function(){ show(cur + 1); });
+
+  var notesBtn = document.getElementById('notesBtn');
+  function toggleNotes(){
+    var open = notesPanel.hidden;
+    notesPanel.hidden = !open;
+    notesBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    requestAnimationFrame(fit);
+  }
+  notesBtn.addEventListener('click', toggleNotes);
+
+  function toggleTheme(){
+    var root = document.documentElement;
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+  }
+  document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+
+  function toggleFs(){
+    try {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    } catch (e) {}
+  }
+  document.getElementById('fsBtn').addEventListener('click', toggleFs);
+
+  document.addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' ){ e.preventDefault(); show(cur + 1); }
+    else if (k === 'ArrowLeft' || k === 'PageUp'){ e.preventDefault(); show(cur - 1); }
+    else if (k === 'Home'){ show(0); }
+    else if (k === 'End'){ show(slides.length - 1); }
+    else if (k === 'n' || k === 'N'){ toggleNotes(); }
+    else if (k === 't' || k === 'T'){ toggleTheme(); }
+    else if (k === 'f' || k === 'F'){ toggleFs(); }
+  });
+
+  var tx = null;
+  viewport.addEventListener('touchstart', function(e){ tx = e.touches[0].clientX; }, {passive:true});
+  viewport.addEventListener('touchend', function(e){
+    if (tx === null) return;
+    var dx = e.changedTouches[0].clientX - tx; tx = null;
+    if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1));
+  }, {passive:true});
+
+  window.addEventListener('resize', fit);
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+  fit();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+})();
+</script>
+</body>
+</html>
