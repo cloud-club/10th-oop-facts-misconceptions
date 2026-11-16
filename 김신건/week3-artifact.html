@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>trackable_type과 다형성</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: 단일 읽기 칼럼 + 스키마 표 / 코드 블록이 이어지는 스터디 핸드아웃 */
+:root {
+  --bg: #fbf9f9;
+  --surface: #ffffff;
+  --ink: #1f1a1c;
+  --muted: #6b5f63;
+  --line: #e6dfe1;
+  --ruby: #a3123a;
+  --ruby-soft: #f7e4ea;
+  --code-bg: #f3eef0;
+  --ok: #1f6f50;
+  --warn: #9a5b00;
+  --f-sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141113; --surface: #1c181a; --ink: #eee7e9; --muted: #a8999e; --line: #332b2e;
+    --ruby: #ff6f93; --ruby-soft: #3a1a24; --code-bg: #221d20; --ok: #6fd3a6; --warn: #f0b45c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141113; --surface: #1c181a; --ink: #eee7e9; --muted: #a8999e; --line: #332b2e;
+  --ruby: #ff6f93; --ruby-soft: #3a1a24; --code-bg: #221d20; --ok: #6fd3a6; --warn: #f0b45c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-sans); font-size: 16px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 72px;
+  word-break: keep-all;
+}
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ruby); }
+h1 { font-size: clamp(28px, 6vw, 40px); line-height: 1.25; margin: 0; text-wrap: balance; font-weight: 700; }
+h1 code { font-size: .85em; }
+h2 { font-size: 22px; line-height: 1.35; margin: 0; text-wrap: balance; }
+h3 { font-size: 17px; margin: 0; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 18px; color: var(--muted); }
+code { font-family: var(--f-mono); font-size: .9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre {
+  margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 16px 18px; overflow-x: auto; font-family: var(--f-mono); font-size: 13.5px; line-height: 1.6;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+.c { color: var(--muted); }
+.k { color: var(--ruby); font-weight: 500; }
+.s { color: var(--ok); }
+.file { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-bottom: -10px; }
+
+/* 스키마 탐색기 */
+.explorer { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 680px) { .explorer { grid-template-columns: minmax(0, 1fr); } }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+caption { text-align: left; padding: 10px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); caption-side: top; }
+th, td { padding: 9px 14px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-weight: 500; color: var(--muted); font-size: 12px; }
+th.poly { color: var(--ruby); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--code-bg); }
+tbody tr[aria-selected="true"] { background: var(--ruby-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--ruby); outline-offset: -2px; }
+td.poly { color: var(--ruby); font-weight: 500; }
+.resolve { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.step { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.step-label { font-size: 12px; color: var(--muted); }
+.step pre { padding: 10px 12px; font-size: 12.5px; }
+.answer { font-family: var(--f-mono); font-size: 13px; padding: 10px 12px; border-radius: 6px; background: var(--ruby-soft); color: var(--ink); overflow-wrap: anywhere; }
+.hint { font-size: 13px; color: var(--muted); }
+
+/* 책 연결 */
+.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.map div { border-top: 2px solid var(--ruby); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.map .term { font-size: 13px; color: var(--muted); }
+.map .book { font-weight: 700; }
+.map .rails { font-family: var(--f-mono); font-size: 13px; }
+
+blockquote { margin: 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--line); color: var(--muted); max-width: 65ch; }
+blockquote cite { display: block; font-style: normal; font-size: 13px; margin-top: 4px; }
+
+.tradeoffs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.tradeoffs li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.tag { font-family: var(--f-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 0; text-align: center; border-radius: 4px; border: 1px solid currentColor; }
+.tag.pro { color: var(--ok); }
+.tag.con { color: var(--warn); }
+
+.note { font-size: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 12px 14px; max-width: 65ch; }
+ol.qs { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 65ch; }
+ol.qs li::marker { color: var(--ruby); font-family: var(--f-mono); }
+footer { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:14px">
+    <span class="eyebrow">객체지향의 사실과 오해 · 3주차 추가 자료</span>
+    <h1>테이블 한 칸에 담긴 다형성, <code>trackable_type</code></h1>
+    <p class="lead">Rails의 polymorphic association을 예로, “무엇이든 추적할 수 있는” <code>action_trackings</code> 테이블이 타입·추상화·다형성을 어떻게 다루는지 살펴봅니다.</p>
+  </header>
+
+  <section>
+    <span class="eyebrow">1 · 문제</span>
+    <h2>게시글도, 댓글도, 사용자도 추적하고 싶다</h2>
+    <p>“누가 무엇을 했는가”를 기록하는 <code>action_trackings</code> 테이블을 만든다고 해 봅시다. 추적 대상이 <code>Post</code> 하나라면 <code>post_id</code> 컬럼이면 충분합니다. 그런데 댓글, 사용자, 주문까지 늘어나면 <code>post_id</code>, <code>comment_id</code>, <code>user_id</code>, <code>order_id</code>… 대부분이 비어 있는 컬럼이 계속 늘어납니다.</p>
+    <p>polymorphic association은 이 컬럼들을 두 칸으로 줄입니다. <strong>어떤 종류인지</strong>(<code>trackable_type</code>)와 <strong>그중 어느 것인지</strong>(<code>trackable_id</code>)입니다.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">2 · 데이터</span>
+    <h2>행을 눌러 Rails가 대상을 찾아가는 과정을 보세요</h2>
+    <div class="explorer">
+      <div class="table-wrap">
+        <table>
+          <caption>action_trackings (예시 데이터)</caption>
+          <thead><tr><th>id</th><th>action</th><th class="poly">trackable_type</th><th class="poly">trackable_id</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="resolve" aria-live="polite">
+        <div class="step">
+          <span class="step-label">① 문자열을 클래스로 바꾸고 id로 찾기</span>
+          <pre><code id="r-find"></code></pre>
+        </div>
+        <div class="step">
+          <span class="step-label">② 실행되는 SQL</span>
+          <pre><code id="r-sql"></code></pre>
+        </div>
+        <div class="step">
+          <span class="step-label">③ 같은 메시지 <code>tracking.trackable.summary</code>의 응답</span>
+          <div class="answer" id="r-answer"></div>
+        </div>
+        <p class="hint" id="r-hint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">3 · 코드</span>
+    <h2>Rails에서는 이렇게 선언합니다</h2>
+    <div class="file">db/migrate/…_create_action_trackings.rb</div>
+<pre><code><span class="k">create_table</span> :action_trackings <span class="k">do</span> |t|
+  t.string     :action
+  t.references :trackable, <span class="k">polymorphic: true</span>, null: false
+  <span class="c"># → trackable_type (string), trackable_id (bigint)</span>
+  <span class="c"># → 두 컬럼을 묶은 복합 인덱스</span>
+  t.timestamps
+<span class="k">end</span></code></pre>
+
+    <div class="file">app/models/action_tracking.rb</div>
+<pre><code><span class="k">class</span> ActionTracking &lt; ApplicationRecord
+  <span class="k">belongs_to</span> :trackable, <span class="k">polymorphic: true</span>
+<span class="k">end</span></code></pre>
+
+    <div class="file">app/models/concerns/trackable.rb · 각 모델</div>
+<pre><code><span class="k">module</span> Trackable
+  <span class="k">extend</span> ActiveSupport::Concern
+  included <span class="k">do</span>
+    <span class="k">has_many</span> :action_trackings, <span class="k">as: :trackable</span>
+  <span class="k">end</span>
+
+  <span class="c"># 이 역할을 맡는 객체는 summary 메시지에 응답해야 한다</span>
+  <span class="k">def</span> summary = <span class="k">raise</span> NotImplementedError
+<span class="k">end</span>
+
+<span class="k">class</span> Post &lt; ApplicationRecord
+  <span class="k">include</span> Trackable
+  <span class="k">def</span> summary = <span class="s">"게시글 「#{title}」"</span>
+<span class="k">end</span>
+
+<span class="k">class</span> Comment &lt; ApplicationRecord
+  <span class="k">include</span> Trackable
+  <span class="k">def</span> summary = <span class="s">"#{post.title}에 단 댓글"</span>
+<span class="k">end</span></code></pre>
+
+    <div class="file">사용하는 쪽</div>
+<pre><code>ActionTracking.recent.each <span class="k">do</span> |tracking|
+  <span class="c"># 대상이 Post인지 Comment인지 묻지 않는다</span>
+  puts <span class="s">"#{tracking.action}: #{tracking.trackable.summary}"</span>
+<span class="k">end</span></code></pre>
+
+    <p class="note"><strong><code>trackable_type</code>에는 무엇이 들어가나요?</strong> Rails 기본값은 테이블명(<code>posts</code>)이 아니라 <strong>모델 클래스명</strong>(<code>"Post"</code>)입니다. STI를 쓰면 하위 클래스가 아닌 base class 이름이 저장됩니다. 클래스명이 DB에 문자열로 박히기 때문에, 모델 이름을 바꾸면 기존 데이터도 함께 마이그레이션해야 합니다.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">4 · 책과 연결하기</span>
+    <h2>3장의 개념이 어디에 대응되는가</h2>
+    <div class="map">
+      <div><span class="term">타입 · 일반화</span><span class="book">트럼프</span><span class="rails">Trackable</span><span class="hint">정원사·병사·신하의 차이를 버리고 “트럼프”로 묶듯, Post·Comment·User의 차이를 버리고 “추적 가능한 것”으로 묶습니다.</span></div>
+      <div><span class="term">인스턴스 · 외연</span><span class="book">하트 여왕, 정원사 2</span><span class="rails">("Post", 12)</span><span class="hint">각 행의 <code>type + id</code> 쌍이 그 타입에 속하는 구체적인 객체 하나를 가리킵니다.</span></div>
+      <div><span class="term">다형성</span><span class="book">같은 메시지, 다른 응답</span><span class="rails">trackable.summary</span><span class="hint">송신자는 하나의 메시지를 보내고, 실제 수신자가 누구냐에 따라 다른 메서드가 실행됩니다.</span></div>
+    </div>
+    <blockquote>객체를 분류하는 기준은 타입이며, 타입을 나누는 기준은 객체가 수행하는 행동이다.<cite>— 3장 「행동이 우선이다」의 요지</cite></blockquote>
+    <p><code>ActionTracking</code>은 대상의 구체적인 클래스를 모릅니다. 아는 것은 “<code>trackable</code>이라는 역할을 하는 무언가”뿐입니다. 덕분에 새로운 모델에 <code>include Trackable</code>만 붙이면 <code>ActionTracking</code> 코드는 한 줄도 바꾸지 않고 추적 대상을 늘릴 수 있습니다.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">5 · 트레이드오프</span>
+    <h2>DB 관점에서는 대가가 있다</h2>
+    <ul class="tradeoffs">
+      <li><span class="tag pro">장점</span><span>추적 대상이 늘어나도 테이블 스키마와 <code>ActionTracking</code> 코드는 그대로입니다.</span></li>
+      <li><span class="tag pro">장점</span><span>“모든 활동 기록”처럼 여러 종류를 한 목록으로 다루기 쉽습니다.</span></li>
+      <li><span class="tag con">단점</span><span><code>trackable_id</code>에 외래 키 제약을 걸 수 없습니다. 원본이 지워져도 DB는 모르고, 고아 행이 생길 수 있습니다.</span></li>
+      <li><span class="tag con">단점</span><span>대상 테이블이 행마다 달라 일반적인 JOIN이 어렵습니다. <code>includes(:trackable)</code>은 타입별로 쿼리를 나눠 preload하고, <code>eager_load</code>(JOIN 방식)는 쓸 수 없습니다.</span></li>
+      <li><span class="tag con">단점</span><span>클래스명이 데이터에 저장되므로 코드의 이름 변경이 데이터 변경으로 이어집니다.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <span class="eyebrow">6 · 이야기해 볼 거리</span>
+    <h2>스터디 질문</h2>
+    <ol class="qs">
+      <li>책은 “타입은 행동으로 나눈다”고 합니다. 그런데 <code>trackable_type</code>은 타입을 <strong>데이터(문자열)</strong>로 저장합니다. 이 둘은 충돌하는 걸까요, 각자 다른 층위의 이야기일까요?</li>
+      <li><code>trackable_type</code>을 보고 <code>case</code> 문으로 분기하는 코드와, <code>trackable.summary</code>를 호출하는 코드는 무엇이 다를까요? 어느 쪽이 다형성을 활용한 걸까요?</li>
+      <li>헤리 벡의 노선도처럼, <code>ActionTracking</code> 입장에서 “지워도 되는 세부 사항”은 무엇이고 “남겨야 하는 본질”은 무엇일까요?</li>
+      <li>외래 키 제약을 포기하는 대가를 감수할 만한 상황과 아닌 상황을 각자의 서비스 예시로 나눠 봅시다.</li>
+    </ol>
+  </section>
+
+  <footer>예시 데이터와 코드는 설명용으로 만든 것입니다. 기준: Rails 7 이상의 <code>belongs_to … polymorphic: true</code>.</footer>
+</main>
+
+<script>
+const ROWS = [
+  { id: 1, action: "created",   type: "Post",    tid: 12, table: "posts",    answer: "게시글 「다형성이란 무엇인가」" },
+  { id: 2, action: "commented", type: "Comment", tid: 88, table: "comments", answer: "다형성이란 무엇인가에 단 댓글" },
+  { id: 3, action: "followed",  type: "User",    tid: 3,  table: "users",    answer: "사용자 @alice" },
+  { id: 4, action: "liked",     type: "Post",    tid: 7,  table: "posts",    answer: "게시글 「트럼프 카드와 타입」" },
+  { id: 5, action: "paid",      type: "Order",   tid: 501, table: "orders",  answer: "주문 #501 (32,000원)" },
+];
+const HINTS = {
+  Post: "같은 Post 타입이라도 id가 다르면 다른 객체입니다. 행 1과 4를 비교해 보세요.",
+  Comment: "ActionTracking은 이 대상이 댓글이라는 사실을 몰라도 됩니다.",
+  User: "User도 Trackable 역할을 맡으면 추적 대상이 됩니다.",
+  Order: "새 모델을 추가해도 ActionTracking 코드는 바뀌지 않았습니다.",
+};
+const tbody = document.getElementById("rows");
+function select(i) {
+  const r = ROWS[i];
+  [...tbody.children].forEach((tr, j) => tr.setAttribute("aria-selected", String(i === j)));
+  document.getElementById("r-find").textContent = `"${r.type}".constantize.find(${r.tid})\n# => #<${r.type} id: ${r.tid}>`;
+  document.getElementById("r-sql").textContent = `SELECT * FROM ${r.table}\nWHERE ${r.table}.id = ${r.tid} LIMIT 1`;
+  document.getElementById("r-answer").textContent = `"${r.answer}"`;
+  document.getElementById("r-hint").textContent = HINTS[r.type];
+}
+ROWS.forEach((r, i) => {
+  const tr = document.createElement("tr");
+  tr.tabIndex = 0;
+  tr.innerHTML = `<td>${r.id}</td><td>${r.action}</td><td class="poly">"${r.type}"</td><td class="poly">${r.tid}</td>`;
+  tr.addEventListener("click", () => select(i));
+  tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); } });
+  tbody.appendChild(tr);
+});
+select(0);
+</script>
+</body>
+</html>
