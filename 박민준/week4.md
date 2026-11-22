@@ -277,7 +277,6 @@ AWS는 기존 Security Hub의 이름을 Security Hub CSPM으로 바꾸고, 새�
 
 ### 참고
 
-- [객체지향의 사실과 오해 — 위키북스](https://wikibook.co.kr/object-orientation/)
 - [AWS IAM — The confused deputy problem](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html)
 - [AWS IAM — Access to AWS accounts owned by third parties](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_common-scenarios_third-party.html)
 - [Amazon GuardDuty — Foundational data sources](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_data-sources.html)
