@@ -3,6 +3,7 @@
 - 책임감 분산(diffusion of responsibility)
 - 사건에 대한 목격자 가 많으면 많을수록 개인이 느끼는 책임감은 적어진다.
 - 사회적 신호, 방관자 효과, 다수의 무시로 특징지어지는 이 같은 현상은 집단적 위기 상황에서 명확한 책임을 가진 권위자가 없을 때 어떤 일이 벌어지는지를 잘 보여준다.
+- **(생각)** 이런 예시는 정말 비유를 못 가져오는 저자 같다. 4장도 그렇고..
 
 ![[Pasted image 20261122204311.png]]
 
@@ -91,11 +92,11 @@
 ![[Pasted image 20261122210954.png]]
 
 - 송신자의 관점에서 다형적인 수신자들을 구별할 필요가 없으며 자신의 요청을 수행할 책임을 지닌다는 점에서 모두 동일하다.
-	- (생각) 이거 꽤 중요한 느낌. 다형성을 가지지만 무의식적으로 구현을 하는 과정에서는 이걸 구분하면서 처리하지 않았을까?
+	- **(생각)** 이거 꽤 중요한 느낌. 다형성을 가지지만 무의식적으로 구현을 하는 과정에서는 이걸 구분하면서 처리하지 않았을까?
 
 ![[Pasted image 20261122211126.png]]
 
-- (생각) 저번주 자료에서 duck typing 또 생각 나는 대목...
+- **(생각)** 저번주 자료에서 duck typing 또 생각 나는 대목...
 
 - 다형성은 객체들의 대체 가능성을 이용해 설계를 유연하고 재사용 가능하게 만든다. 다형성을 사용하면 송신자가 수신자의 종류를 모르더라도 메시지를 전송할 수 있다.
 
@@ -135,7 +136,7 @@
 
 ![[Pasted image 20261122211757.png]]
 
-- (생각) 나의 생각이 점점 맞는 것 같은 느낌을 준다.. 객체지향은 어떻게 메시지를 주고받느냐에 집중하여 봐야 한다는 생각..
+- **(생각)** 나의 생각이 점점 맞는 것 같은 느낌을 준다.. 객체지향은 어떻게 메시지를 주고받느냐에 집중하여 봐야 한다는 생각..
 
 ![[Pasted image 20261122211937.png]]
 
@@ -160,19 +161,20 @@
 
 
 **고민을 연기하라** 
-- 객체는 다른 객체의 상태를 묻지 말아야 한다. 객체가 다른 객체의 상태를 묻는다는 것은 메시지를 전송하기 이전에 객체가 가져야 하는 상태에 관해 너무 많이 고민하고 있다는 증거이다.
-- **(생각)** 수신자의 상태에 대해서 조횧하고 확인하는 로직등을 짜다보면 결합도가 높아지는게 느껴진다. 코드를 직접 짜면서 예전에 했던 고민 중에 if condition의 처리에 대한 것이 있었다. 아래와 같은 상황에서 어떤게 옳은가? 코드의 가독성에 맞게 구성하면 되겠지라는 상황이었는데 오히려 지금 이 책에서는 CClass의 상황이 맞아보인다.
+- **객체는 다른 객체의 상태를 묻지 말아야 한다. 객체가 다른 객체의 상태를 묻는다는 것은 메시지를 전송하기 이전에 객체가 가져야 하는 상태에 관해 너무 많이 고민하고 있다는 증거이다.**
+- **(생각)** 수신자의 상태에 대해서 조회하고 확인하는 로직등을 짜다보면 결합도가 높아지는게 느껴진다. 코드를 직접 짜면서 예전에 했던 고민 중에 if condition의 처리에 대한 것이 있었다. 아래와 같은 상황에서 어떤게 옳은가? 코드의 가독성에 맞게 구성하면 되겠지라는 상황이었는데 오히려 지금 이 책에서는 CClass의 상황이 맞아보인다.
 
 ```ruby
 class AClass
-	def b
+	def a_to_b
 		b = BClass.new
 		 
 		if b.b_condition
 			b.b_method
+		end
 	end
 	
-	def c
+	def a_to_c
 		c = CClass.new		
 		c.c_method
 	end
@@ -201,13 +203,138 @@ class CClass
 end
 
 
+class DClass
+	def d_1
+		if condition_1
+			action_1
+		end
+	end
+	
+	def d_2
+		action_2
+	end
+	
+	def action_1
+		print '1'	
+	end 
+	
+	def action_2
+		if condition_1
+			print '2'
+		end
+	end
+	
+	def condition_1
+		true
+	end
+	
+	def condition_2
+		false
+	end
+end
 ```
+
+```python 
+# AClass: 주문을 관리하는 클래스
+class OrderService:
+
+    # BClass를 사용하는 경우
+    def order_product(self):
+        delivery = DeliveryService()
+
+        # 호출하는 쪽에서 조건 확인
+        if delivery.has_stock():
+            delivery.send_product()
+
+    # CClass를 사용하는 경우
+    def pay_order(self):
+        payment = PaymentService()
+
+        # 조건 확인 없이 메서드 호출
+        payment.pay()
+
+
+# BClass: 배송을 담당하는 클래스
+class DeliveryService:
+
+    def send_product(self):
+        print("상품을 배송합니다.")
+        return 1
+
+    def has_stock(self):
+        # 재고가 있는지 확인
+        return True
+
+
+# CClass: 결제를 담당하는 클래스
+class PaymentService:
+
+    def pay(self):
+        # 호출받는 쪽에서 조건 확인
+        if not self.can_pay():
+            return
+
+        print("결제를 진행합니다.")
+        return 1
+
+    def can_pay(self):
+        # 결제가 가능한지 확인
+        return True
+
+
+# DClass: 쿠폰을 관리하는 클래스
+class CouponService:
+
+    # 조건을 확인하고 실제 동작을 호출
+    def apply_coupon(self):
+        if self.is_coupon_available():
+            self.print_discount()
+
+    # 조건 확인 없이 실제 동작을 호출
+    def show_coupon(self):
+        self.print_coupon()
+
+    def print_discount(self):
+        print("쿠폰 할인을 적용합니다.")
+
+    def print_coupon(self):
+        # 호출받는 쪽에서 조건 확인
+        if self.is_coupon_available():
+            print("사용 가능한 쿠폰입니다.")
+
+    def is_coupon_available(self):
+        return True
+
+    def is_coupon_expired(self):
+        return False
+
+
+# 실행
+if __name__ == "__main__":
+
+    order = OrderService()
+
+    print("=== 상품 주문 ===")
+    order.order_product()
+
+    print("\n=== 결제 ===")
+    order.pay_order()
+
+    coupon = CouponService()
+
+    print("\n=== 쿠폰 적용 ===")
+    coupon.apply_coupon()
+
+    print("\n=== 쿠폰 조회 ===")
+    coupon.show_coupon()
+```
+
 
 - 객체가 자신이 수신할 메시지를 결정하게 하지 말고 메시지가 협력에 필요한 객체를 발견하게 해야 한다.
 
 ### 메시지를 믿어라
 
-- (생각) 메시지를 중심으로 설계하다보면, 무슨 객체인지는 중요해지지 않아진다. 결국 메시지를 이해하고 주고받을 수 있는 관계, 구조가 되며, 이는 재사용 가능하다.
+- **(생각)** 메시지를 중심으로 설계하다보면, 무슨 객체인지는 중요해지지 않아진다. 결국 메시지를 이해하고 주고받을 수 있는 관계, 구조가 되며, 이는 재사용 가능하다.
 
 ## 객체 인터페이스
 
